@@ -1,0 +1,6 @@
+@PoliCareSystem_HostAddress = http://localhost:5230
+
+GET {{PoliCareSystem_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
