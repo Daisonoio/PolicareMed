@@ -7,8 +7,9 @@ public class Appointment : BaseEntity
     public Guid PatientId { get; set; }
     public virtual Patient Patient { get; set; } = null!;
 
-    public Guid ProfessionalId { get; set; }
-    public virtual Professional Professional { get; set; } = null!;
+    // CAMBIATO: Solo DoctorId, rimosso ProfessionalId
+    public Guid DoctorId { get; set; }
+    public virtual Doctor Doctor { get; set; } = null!;
 
     public Guid RoomId { get; set; }
     public virtual Room Room { get; set; } = null!;
@@ -17,7 +18,7 @@ public class Appointment : BaseEntity
     public DateTime EndTime { get; set; }
 
     [MaxLength(50)]
-    public string Status { get; set; } = string.Empty; // Scheduled, Confirmed, InProgress, Completed, Cancelled, NoShow
+    public string Status { get; set; } = AppointmentStatus.Scheduled.ToString();
 
     [MaxLength(100)]
     public string? ServiceType { get; set; }
@@ -26,7 +27,7 @@ public class Appointment : BaseEntity
     public string? Notes { get; set; }
 
     public decimal? Price { get; set; }
-    public bool IsPaid { get; set; }
+    public bool IsPaid { get; set; } = false;
 
     // For recurring appointments
     public Guid? RecurringGroupId { get; set; }

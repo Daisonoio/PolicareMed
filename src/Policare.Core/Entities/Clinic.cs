@@ -1,5 +1,4 @@
 ﻿using System.ComponentModel.DataAnnotations;
-using System.Numerics;
 
 namespace PoliCare.Core.Entities;
 
@@ -25,7 +24,9 @@ public class Clinic : BaseEntity
 
     public string Settings { get; set; } = "{}";
 
+    // Navigation Properties - AGGIORNATE
     public virtual ICollection<Patient> Patients { get; set; } = new List<Patient>();
     public virtual ICollection<Room> Rooms { get; set; } = new List<Room>();
-    public virtual ICollection<Professional> Professionals { get; set; } = new List<Professional>();
+    public virtual ICollection<Doctor> Doctors { get; set; } = new List<Doctor>(); // CAMBIATO da Professionals
+    public virtual ICollection<User> Users { get; set; } = new List<User>();
 }

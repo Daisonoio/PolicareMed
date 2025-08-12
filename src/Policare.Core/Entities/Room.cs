@@ -20,8 +20,9 @@ public class Room : BaseEntity
     // Foreign Key
     public Guid ClinicId { get; set; }
 
-    // Navigation Properties
+    // Navigation Properties - SEMPLIFICATE
     public virtual Clinic Clinic { get; set; } = null!;
-    public virtual ICollection<Appointment> Appointments { get; set; } = new List<Appointment>();
-    public virtual ICollection<RoomAvailability> Availabilities { get; set; } = new List<RoomAvailability>();
+
+    // RIMOSSO: Appointments collection (causa shadow property)
+    // RIMOSSO: Availabilities collection (non esiste più)
 }

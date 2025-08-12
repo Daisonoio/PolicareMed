@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using PoliCare.Infrastructure.Data;
@@ -11,9 +12,11 @@ using PoliCare.Infrastructure.Data;
 namespace PoliCare.Infrastructure.Migrations
 {
     [DbContext(typeof(PoliCareDbContext))]
-    partial class PoliCareDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250812190917_RemoveProfessionalUseDoctorOnly")]
+    partial class RemoveProfessionalUseDoctorOnly
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

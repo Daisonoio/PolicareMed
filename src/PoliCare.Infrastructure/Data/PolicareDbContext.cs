@@ -1,6 +1,4 @@
-﻿// PoliCare.Infrastructure/Data/PoliCareDbContext.cs
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Metadata.Internal;
+﻿using Microsoft.EntityFrameworkCore;
 using PoliCare.Core.Entities;
 
 namespace PoliCare.Infrastructure.Data;
@@ -12,14 +10,15 @@ public class PoliCareDbContext : DbContext
     {
     }
 
-    // DbSets
+    // DbSets - SOLO entità che manteniamo
     public DbSet<Clinic> Clinics { get; set; }
     public DbSet<Patient> Patients { get; set; }
+    public DbSet<Doctor> Doctors { get; set; }
+    public DbSet<User> Users { get; set; }
     public DbSet<Room> Rooms { get; set; }
-    public DbSet<Professional> Professionals { get; set; }
     public DbSet<Appointment> Appointments { get; set; }
-    public DbSet<RoomAvailability> RoomAvailabilities { get; set; }
-    public DbSet<ProfessionalAvailability> ProfessionalAvailabilities { get; set; }
+    public DbSet<TimeSlot> TimeSlots { get; set; }
+    public DbSet<MedicalRecord> MedicalRecords { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -30,6 +29,7 @@ public class PoliCareDbContext : DbContext
         {
             entity.HasIndex(e => e.VatNumber).IsUnique();
             entity.HasIndex(e => e.Email);
+            entity.Property(e => e.Settings).HasDefaultValue("{}");
         });
 
         // Patient configuration
@@ -38,87 +38,142 @@ public class PoliCareDbContext : DbContext
             entity.HasIndex(e => new { e.ClinicId, e.FiscalCode }).IsUnique();
             entity.HasIndex(e => e.Email);
             entity.HasIndex(e => new { e.ClinicId, e.LastName, e.FirstName });
+
+            entity.HasOne(e => e.Clinic)
+                .WithMany(c => c.Patients)
+                .HasForeignKey(e => e.ClinicId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
-        // Room configuration
+        // Doctor configuration
+        modelBuilder.Entity<Doctor>(entity =>
+        {
+            entity.HasIndex(e => e.LicenseNumber).IsUnique();
+
+            entity.HasOne(e => e.User)
+                .WithOne(u => u.Doctor)
+                .HasForeignKey<Doctor>(d => d.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Clinic)
+                .WithMany(c => c.Doctors)
+                .HasForeignKey(e => e.ClinicId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.Property(e => e.HourlyRate).HasPrecision(10, 2);
+            entity.Property(e => e.CommissionPercentage).HasPrecision(5, 4);
+            entity.Property(e => e.WorkingHours).HasDefaultValue("{}");
+        });
+
+        // User configuration  
+        modelBuilder.Entity<User>(entity =>
+        {
+            entity.HasIndex(e => e.Email).IsUnique();
+
+            entity.HasOne(e => e.Clinic)
+                .WithMany(c => c.Users)
+                .HasForeignKey(e => e.ClinicId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // Room configuration - SENZA navigation verso RoomAvailability
         modelBuilder.Entity<Room>(entity =>
         {
             entity.HasIndex(e => new { e.ClinicId, e.Code }).IsUnique();
+
             entity.HasOne(e => e.Clinic)
                 .WithMany(c => c.Rooms)
                 .HasForeignKey(e => e.ClinicId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
 
-        // Professional configuration
-        modelBuilder.Entity<Professional>(entity =>
-        {
-            entity.HasIndex(e => e.Email).IsUnique();
-            entity.HasIndex(e => e.LicenseNumber);
-            entity.HasOne(e => e.Clinic)
-                .WithMany(c => c.Professionals)
-                .HasForeignKey(e => e.ClinicId)
-                .OnDelete(DeleteBehavior.Restrict);
-        });
-
-        // Appointment configuration
+        // Appointment configuration - CORRETTA per evitare shadow properties
         modelBuilder.Entity<Appointment>(entity =>
         {
-            entity.HasIndex(e => new { e.ProfessionalId, e.StartTime });
+            // Indici per performance
+            entity.HasIndex(e => new { e.DoctorId, e.StartTime });
             entity.HasIndex(e => new { e.RoomId, e.StartTime });
             entity.HasIndex(e => e.PatientId);
             entity.HasIndex(e => e.Status);
 
+            // Relationship con Patient
             entity.HasOne(e => e.Patient)
                 .WithMany(p => p.Appointments)
                 .HasForeignKey(e => e.PatientId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            entity.HasOne(e => e.Professional)
-                .WithMany(p => p.Appointments)
-                .HasForeignKey(e => e.ProfessionalId)
+            // Relationship con Doctor - ESPLICITA
+            entity.HasOne(e => e.Doctor)
+                .WithMany(d => d.Appointments)
+                .HasForeignKey(e => e.DoctorId)
                 .OnDelete(DeleteBehavior.Restrict);
 
+            // Relationship con Room - ESPLICITA e senza collection navigation
             entity.HasOne(e => e.Room)
-                .WithMany(r => r.Appointments)
+                .WithMany() // Nessuna collection navigation in Room
                 .HasForeignKey(e => e.RoomId)
                 .OnDelete(DeleteBehavior.Restrict);
 
+            // Self-referencing relationship per follow-up
             entity.HasOne(e => e.ParentAppointment)
                 .WithMany(p => p.FollowUpAppointments)
                 .HasForeignKey(e => e.ParentAppointmentId)
                 .OnDelete(DeleteBehavior.Restrict);
 
+            // Precision per Price
             entity.Property(e => e.Price).HasPrecision(10, 2);
         });
 
-        // RoomAvailability configuration
-        modelBuilder.Entity<RoomAvailability>(entity =>
+        // TimeSlot configuration
+        modelBuilder.Entity<TimeSlot>(entity =>
         {
-            entity.HasIndex(e => new { e.RoomId, e.DayOfWeek });
+            entity.HasIndex(e => new { e.DoctorId, e.DayOfWeek, e.StartTime });
+
+            entity.HasOne(e => e.Doctor)
+                .WithMany(d => d.TimeSlots)
+                .HasForeignKey(e => e.DoctorId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // TimeSlot relationship con Room - SEMPLIFICATA
             entity.HasOne(e => e.Room)
-                .WithMany(r => r.Availabilities)
+                .WithMany() // Nessuna collection navigation in Room
                 .HasForeignKey(e => e.RoomId)
-                .OnDelete(DeleteBehavior.Cascade);
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
-        // ProfessionalAvailability configuration
-        modelBuilder.Entity<ProfessionalAvailability>(entity =>
+        // MedicalRecord configuration
+        modelBuilder.Entity<MedicalRecord>(entity =>
         {
-            entity.HasIndex(e => new { e.ProfessionalId, e.DayOfWeek });
-            entity.HasOne(e => e.Professional)
-                .WithMany(p => p.Availabilities)
-                .HasForeignKey(e => e.ProfessionalId)
-                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(e => e.PatientId);
+            entity.HasIndex(e => e.DoctorId);
+            entity.HasIndex(e => e.AppointmentId);
+
+            entity.HasOne(e => e.Patient)
+                .WithMany(p => p.MedicalRecords)
+                .HasForeignKey(e => e.PatientId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.Doctor)
+                .WithMany() // Nessuna collection navigation in Doctor per MedicalRecords
+                .HasForeignKey(e => e.DoctorId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.Appointment)
+                .WithMany() // Nessuna collection navigation in Appointment
+                .HasForeignKey(e => e.AppointmentId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.Property(e => e.Attachments).HasDefaultValue("[]");
         });
 
-        // Soft delete global query filter
+        // Soft delete global query filters
         modelBuilder.Entity<Clinic>().HasQueryFilter(e => !e.IsDeleted);
         modelBuilder.Entity<Patient>().HasQueryFilter(e => !e.IsDeleted);
+        modelBuilder.Entity<Doctor>().HasQueryFilter(e => !e.IsDeleted);
+        modelBuilder.Entity<User>().HasQueryFilter(e => !e.IsDeleted);
         modelBuilder.Entity<Room>().HasQueryFilter(e => !e.IsDeleted);
-        modelBuilder.Entity<Professional>().HasQueryFilter(e => !e.IsDeleted);
         modelBuilder.Entity<Appointment>().HasQueryFilter(e => !e.IsDeleted);
-        modelBuilder.Entity<RoomAvailability>().HasQueryFilter(e => !e.IsDeleted);
-        modelBuilder.Entity<ProfessionalAvailability>().HasQueryFilter(e => !e.IsDeleted);
+        modelBuilder.Entity<TimeSlot>().HasQueryFilter(e => !e.IsDeleted);
+        modelBuilder.Entity<MedicalRecord>().HasQueryFilter(e => !e.IsDeleted);
     }
 }
