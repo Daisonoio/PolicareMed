@@ -3,6 +3,8 @@ using Microsoft.OpenApi.Models;
 using PoliCare.Core.Interfaces;
 using PoliCare.Infrastructure.Data;
 using PoliCare.Infrastructure.Repositories;
+using PoliCare.Services.Interfaces;
+using PoliCare.Services.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -27,6 +29,9 @@ builder.Services.AddDbContext<PoliCareDbContext>(options =>
     )
 );
 
+builder.Services.AddScoped<IPatientService, PatientService>();
+builder.Services.AddScoped<IDoctorService, DoctorService>();
+
 // Repository Pattern con Logging
 builder.Services.AddScoped<IUnitOfWork>(provider =>
 {
@@ -35,6 +40,7 @@ builder.Services.AddScoped<IUnitOfWork>(provider =>
     var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
     return new UnitOfWork(context, logger, loggerFactory);
 });
+
 
 // CORS
 builder.Services.AddCors(options =>

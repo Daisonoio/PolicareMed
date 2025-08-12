@@ -1,4 +1,6 @@
-﻿public class ClinicDto
+﻿
+namespace Policare.API.DTOs;
+public class ClinicDto
 {
     public Guid Id { get; set; }
     public string Name { get; set; } = string.Empty;

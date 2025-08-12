@@ -68,6 +68,7 @@ public class Repository<T> : IRepository<T> where T : class
         }
     }
 
+    // AGGIORNATO: Restituisce IQueryable di Entity Framework
     public virtual IQueryable<T> Find(Expression<Func<T, bool>> expression)
     {
         return _dbSet.Where(expression);
@@ -80,6 +81,12 @@ public class Repository<T> : IRepository<T> where T : class
             return _dbSet.IgnoreQueryFilters().Where(expression);
         }
         return _dbSet.Where(expression);
+    }
+
+    // AGGIUNTO: Metodo per ottenere IQueryable
+    public virtual IQueryable<T> GetQueryable()
+    {
+        return _dbSet.AsQueryable();
     }
 
     public virtual async Task<bool> ExistsAsync(Expression<Func<T, bool>> expression)
