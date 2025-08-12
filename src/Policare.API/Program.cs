@@ -28,7 +28,7 @@ builder.Services.AddDbContext<PoliCareDbContext>(options =>
         x => x.MigrationsAssembly("PoliCare.Infrastructure") // Assicurati che sia esatto
     )
 );
-
+builder.Services.AddScoped<IRoomService, RoomService>();
 builder.Services.AddScoped<IPatientService, PatientService>();
 builder.Services.AddScoped<IDoctorService, DoctorService>();
 
