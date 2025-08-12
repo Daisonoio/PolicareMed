@@ -24,12 +24,6 @@ public class Repository<T> : IRepository<T> where T : class
     {
         try
         {
-            if (typeof(BaseEntity).IsAssignableFrom(typeof(T)))
-            {
-                return await _dbSet.FindAsync(id);
-            }
-
-            // For non-BaseEntity types
             return await _dbSet.FindAsync(id);
         }
         catch (Exception ex)
@@ -68,25 +62,48 @@ public class Repository<T> : IRepository<T> where T : class
         }
     }
 
-    // AGGIORNATO: Restituisce IQueryable di Entity Framework
-    public virtual IQueryable<T> Find(Expression<Func<T, bool>> expression)
+    // NUOVI METODI: Async diretti
+    public virtual async Task<T?> GetFirstOrDefaultAsync(Expression<Func<T, bool>> predicate)
     {
-        return _dbSet.Where(expression);
-    }
-
-    public virtual IQueryable<T> FindWithDeleted(Expression<Func<T, bool>> expression)
-    {
-        if (typeof(BaseEntity).IsAssignableFrom(typeof(T)))
+        try
         {
-            return _dbSet.IgnoreQueryFilters().Where(expression);
+            return await _dbSet.FirstOrDefaultAsync(predicate);
         }
-        return _dbSet.Where(expression);
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting first entity with predicate");
+            throw;
+        }
     }
 
-    // AGGIUNTO: Metodo per ottenere IQueryable
-    public virtual IQueryable<T> GetQueryable()
+    public virtual async Task<IEnumerable<T>> GetWhereAsync(Expression<Func<T, bool>> predicate)
     {
-        return _dbSet.AsQueryable();
+        try
+        {
+            return await _dbSet.Where(predicate).ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting entities with predicate");
+            throw;
+        }
+    }
+
+    public virtual async Task<IEnumerable<T>> GetWhereWithDeletedAsync(Expression<Func<T, bool>> predicate)
+    {
+        try
+        {
+            if (typeof(BaseEntity).IsAssignableFrom(typeof(T)))
+            {
+                return await _dbSet.IgnoreQueryFilters().Where(predicate).ToListAsync();
+            }
+            return await _dbSet.Where(predicate).ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting entities with deleted");
+            throw;
+        }
     }
 
     public virtual async Task<bool> ExistsAsync(Expression<Func<T, bool>> expression)
@@ -216,8 +233,6 @@ public class Repository<T> : IRepository<T> where T : class
                 // Soft delete
                 baseEntity.IsDeleted = true;
                 baseEntity.DeletedAt = DateTime.UtcNow;
-                // baseEntity.DeletedBy = _currentUserService.GetUserId(); // TODO: Implement when auth is ready
-
                 _dbSet.Update(entity);
             }
             else
@@ -239,7 +254,7 @@ public class Repository<T> : IRepository<T> where T : class
     {
         try
         {
-            var entities = await Find(expression).ToListAsync();
+            var entities = await GetWhereAsync(expression);
 
             if (!entities.Any()) return false;
 

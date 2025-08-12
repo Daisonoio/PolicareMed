@@ -1,21 +1,18 @@
 ﻿using System.Linq.Expressions;
-using Microsoft.EntityFrameworkCore; // AGGIUNTO per IQueryable EF
 
 namespace PoliCare.Core.Interfaces;
 
 public interface IRepository<T> where T : class
 {
-    // Query methods
+    // Query methods - ASYNC DIRETTAMENTE NEL REPOSITORY
     Task<T?> GetByIdAsync(Guid id);
     Task<IEnumerable<T>> GetAllAsync();
     Task<IEnumerable<T>> GetPagedAsync(int pageNumber, int pageSize);
 
-    // AGGIORNATO: Restituisce IQueryable per supportare Include e altri metodi EF
-    IQueryable<T> Find(Expression<Func<T, bool>> expression);
-    IQueryable<T> FindWithDeleted(Expression<Func<T, bool>> expression);
-
-    // AGGIUNTO: Metodo per ottenere tutti gli elementi come IQueryable
-    IQueryable<T> GetQueryable();
+    // CAMBIATI: Metodi async diretti invece di IQueryable
+    Task<T?> GetFirstOrDefaultAsync(Expression<Func<T, bool>> predicate);
+    Task<IEnumerable<T>> GetWhereAsync(Expression<Func<T, bool>> predicate);
+    Task<IEnumerable<T>> GetWhereWithDeletedAsync(Expression<Func<T, bool>> predicate);
 
     Task<bool> ExistsAsync(Expression<Func<T, bool>> expression);
     Task<int> CountAsync(Expression<Func<T, bool>>? expression = null);

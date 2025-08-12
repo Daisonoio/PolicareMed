@@ -1,8 +1,8 @@
 ﻿using Microsoft.Extensions.Logging;
-using Microsoft.EntityFrameworkCore; // AGGIUNTO - Necessario per Include
 using PoliCare.Core.Entities;
 using PoliCare.Core.Interfaces;
 using PoliCare.Services.Interfaces;
+
 namespace PoliCare.Services.Services;
 
 public class DoctorService : IDoctorService
@@ -21,13 +21,9 @@ public class DoctorService : IDoctorService
         try
         {
             var doctors = await _unitOfWork.Repository<Doctor>()
-                .Find(d => d.ClinicId == clinicId)
-                .Include(d => d.User)
-                .OrderBy(d => d.User.LastName)
-                .ThenBy(d => d.User.FirstName)
-                .ToListAsync();
+                .GetWhereAsync(d => d.ClinicId == clinicId);
 
-            return doctors;
+            return doctors.OrderBy(d => d.Specialization);
         }
         catch (Exception ex)
         {
@@ -40,13 +36,7 @@ public class DoctorService : IDoctorService
     {
         try
         {
-            var doctor = await _unitOfWork.Repository<Doctor>()
-                .Find(d => d.Id == doctorId)
-                .Include(d => d.User)
-                .Include(d => d.Clinic)
-                .FirstOrDefaultAsync();
-
-            return doctor;
+            return await _unitOfWork.Repository<Doctor>().GetByIdAsync(doctorId);
         }
         catch (Exception ex)
         {
@@ -59,13 +49,8 @@ public class DoctorService : IDoctorService
     {
         try
         {
-            var doctor = await _unitOfWork.Repository<Doctor>()
-                .Find(d => d.UserId == userId)
-                .Include(d => d.User)
-                .Include(d => d.Clinic)
-                .FirstOrDefaultAsync();
-
-            return doctor;
+            return await _unitOfWork.Repository<Doctor>()
+                .GetFirstOrDefaultAsync(d => d.UserId == userId);
         }
         catch (Exception ex)
         {
@@ -84,8 +69,7 @@ public class DoctorService : IDoctorService
             if (!string.IsNullOrEmpty(doctor.LicenseNumber))
             {
                 var existingDoctor = await _unitOfWork.Repository<Doctor>()
-                    .Find(d => d.LicenseNumber == doctor.LicenseNumber)
-                    .FirstOrDefaultAsync();
+                    .GetFirstOrDefaultAsync(d => d.LicenseNumber == doctor.LicenseNumber);
 
                 if (existingDoctor != null)
                 {
@@ -95,8 +79,7 @@ public class DoctorService : IDoctorService
 
             // 2. Verifica unicità email utente
             var existingUser = await _unitOfWork.Repository<User>()
-                .Find(u => u.Email == user.Email)
-                .FirstOrDefaultAsync();
+                .GetFirstOrDefaultAsync(u => u.Email == user.Email);
 
             if (existingUser != null)
             {
@@ -132,11 +115,7 @@ public class DoctorService : IDoctorService
     {
         try
         {
-            var existingDoctor = await _unitOfWork.Repository<Doctor>()
-                .Find(d => d.Id == doctorId)
-                .Include(d => d.User)
-                .FirstOrDefaultAsync();
-
+            var existingDoctor = await _unitOfWork.Repository<Doctor>().GetByIdAsync(doctorId);
             if (existingDoctor == null)
             {
                 return null;
@@ -147,8 +126,7 @@ public class DoctorService : IDoctorService
                 updatedDoctor.LicenseNumber != existingDoctor.LicenseNumber)
             {
                 var duplicateDoctor = await _unitOfWork.Repository<Doctor>()
-                    .Find(d => d.LicenseNumber == updatedDoctor.LicenseNumber && d.Id != doctorId)
-                    .FirstOrDefaultAsync();
+                    .GetFirstOrDefaultAsync(d => d.LicenseNumber == updatedDoctor.LicenseNumber && d.Id != doctorId);
 
                 if (duplicateDoctor != null)
                 {
@@ -190,14 +168,14 @@ public class DoctorService : IDoctorService
                 return false;
             }
 
-            // Trova e soft delete dell'User associato
+            // Trova User associato per soft delete
             var doctor = await _unitOfWork.Repository<Doctor>()
-                .FindWithDeleted(d => d.Id == doctorId)
-                .FirstOrDefaultAsync();
+                .GetWhereWithDeletedAsync(d => d.Id == doctorId);
 
-            if (doctor != null)
+            var deletedDoctor = doctor.FirstOrDefault();
+            if (deletedDoctor != null)
             {
-                await _unitOfWork.Repository<User>().DeleteAsync(doctor.UserId);
+                await _unitOfWork.Repository<User>().DeleteAsync(deletedDoctor.UserId);
             }
 
             await _unitOfWork.CompleteAsync();
@@ -226,17 +204,11 @@ public class DoctorService : IDoctorService
             var lowerSearchTerm = searchTerm.ToLower();
 
             var doctors = await _unitOfWork.Repository<Doctor>()
-                .Find(d => d.ClinicId == clinicId &&
-                          (d.User.FirstName.ToLower().Contains(lowerSearchTerm) ||
-                           d.User.LastName.ToLower().Contains(lowerSearchTerm) ||
-                           d.Specialization.ToLower().Contains(lowerSearchTerm) ||
-                           (d.LicenseNumber != null && d.LicenseNumber.ToLower().Contains(lowerSearchTerm))))
-                .Include(d => d.User)
-                .OrderBy(d => d.User.LastName)
-                .ThenBy(d => d.User.FirstName)
-                .ToListAsync();
+                .GetWhereAsync(d => d.ClinicId == clinicId &&
+                              (d.Specialization.ToLower().Contains(lowerSearchTerm) ||
+                               (d.LicenseNumber != null && d.LicenseNumber.ToLower().Contains(lowerSearchTerm))));
 
-            return doctors;
+            return doctors.OrderBy(d => d.Specialization);
         }
         catch (Exception ex)
         {
@@ -264,11 +236,7 @@ public class DoctorService : IDoctorService
         try
         {
             var doctors = await _unitOfWork.Repository<Doctor>()
-                .Find(d => d.ClinicId == clinicId && d.Specialization.ToLower() == specialization.ToLower())
-                .Include(d => d.User)
-                .OrderBy(d => d.User.LastName)
-                .ThenBy(d => d.User.FirstName)
-                .ToListAsync();
+                .GetWhereAsync(d => d.ClinicId == clinicId && d.Specialization.ToLower() == specialization.ToLower());
 
             return doctors;
         }

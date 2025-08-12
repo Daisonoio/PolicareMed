@@ -38,10 +38,11 @@ public class DoctorsController : ControllerBase
                 LicenseNumber = d.LicenseNumber,
                 HourlyRate = d.HourlyRate,
                 CommissionPercentage = d.CommissionPercentage,
-                FirstName = d.User.FirstName,
-                LastName = d.User.LastName,
-                Email = d.User.Email,
-                Phone = d.User.Phone,
+                // Per ora lasciamo vuoti i campi User - li implementeremo dopo
+                FirstName = "TBD", // TODO: Implementare caricamento User
+                LastName = "TBD",
+                Email = "TBD",
+                Phone = "TBD",
                 CreatedAt = d.CreatedAt
             });
 
@@ -77,10 +78,11 @@ public class DoctorsController : ControllerBase
                 LicenseNumber = doctor.LicenseNumber,
                 HourlyRate = doctor.HourlyRate,
                 CommissionPercentage = doctor.CommissionPercentage,
-                FirstName = doctor.User.FirstName,
-                LastName = doctor.User.LastName,
-                Email = doctor.User.Email,
-                Phone = doctor.User.Phone,
+                // Per ora lasciamo vuoti i campi User
+                FirstName = "TBD",
+                LastName = "TBD",
+                Email = "TBD",
+                Phone = "TBD",
                 CreatedAt = doctor.CreatedAt
             };
 
@@ -227,7 +229,7 @@ public class DoctorsController : ControllerBase
     }
 
     /// <summary>
-    /// Cerca medici per nome, cognome, specializzazione o numero licenza
+    /// Cerca medici per specializzazione o numero licenza
     /// </summary>
     [HttpGet("clinic/{clinicId}/search")]
     public async Task<ActionResult<IEnumerable<DoctorDto>>> SearchDoctors(Guid clinicId, [FromQuery] string searchTerm)
@@ -244,10 +246,10 @@ public class DoctorsController : ControllerBase
                 LicenseNumber = d.LicenseNumber,
                 HourlyRate = d.HourlyRate,
                 CommissionPercentage = d.CommissionPercentage,
-                FirstName = d.User.FirstName,
-                LastName = d.User.LastName,
-                Email = d.User.Email,
-                Phone = d.User.Phone,
+                FirstName = "TBD",
+                LastName = "TBD",
+                Email = "TBD",
+                Phone = "TBD",
                 CreatedAt = d.CreatedAt
             });
 
@@ -256,40 +258,6 @@ public class DoctorsController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error searching doctors for clinic {ClinicId}", clinicId);
-            return StatusCode(500, "Internal server error");
-        }
-    }
-
-    /// <summary>
-    /// Ottiene medici per specializzazione
-    /// </summary>
-    [HttpGet("clinic/{clinicId}/specialization/{specialization}")]
-    public async Task<ActionResult<IEnumerable<DoctorDto>>> GetDoctorsBySpecialization(Guid clinicId, string specialization)
-    {
-        try
-        {
-            var doctors = await _doctorService.GetDoctorsBySpecializationAsync(clinicId, specialization);
-            var doctorDtos = doctors.Select(d => new DoctorDto
-            {
-                Id = d.Id,
-                UserId = d.UserId,
-                ClinicId = d.ClinicId,
-                Specialization = d.Specialization,
-                LicenseNumber = d.LicenseNumber,
-                HourlyRate = d.HourlyRate,
-                CommissionPercentage = d.CommissionPercentage,
-                FirstName = d.User.FirstName,
-                LastName = d.User.LastName,
-                Email = d.User.Email,
-                Phone = d.User.Phone,
-                CreatedAt = d.CreatedAt
-            });
-
-            return Ok(doctorDtos);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error retrieving doctors by specialization for clinic {ClinicId}", clinicId);
             return StatusCode(500, "Internal server error");
         }
     }

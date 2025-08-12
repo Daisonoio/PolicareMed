@@ -1,9 +1,9 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using PoliCare.Core.Entities;
 using PoliCare.Core.Interfaces;
+using Policare.API.DTOs;
 
-namespace PoliCare.Api.Controllers;
+namespace Policare.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
@@ -95,8 +95,7 @@ public class ClinicsController : ControllerBase
             if (!string.IsNullOrEmpty(createClinicDto.VatNumber))
             {
                 var existingClinic = await _unitOfWork.Repository<Clinic>()
-                    .Find(c => c.VatNumber == createClinicDto.VatNumber)
-                    .FirstOrDefaultAsync();
+                    .GetFirstOrDefaultAsync(c => c.VatNumber == createClinicDto.VatNumber);
 
                 if (existingClinic != null)
                 {
@@ -111,7 +110,8 @@ public class ClinicsController : ControllerBase
                 Phone = createClinicDto.Phone ?? string.Empty,
                 Email = createClinicDto.Email ?? string.Empty,
                 VatNumber = createClinicDto.VatNumber ?? string.Empty,
-                IsActive = true
+                IsActive = true,
+                Settings = "{}" // Inizializzazione corretta
             };
 
             await _unitOfWork.Repository<Clinic>().AddAsync(clinic);
@@ -157,8 +157,7 @@ public class ClinicsController : ControllerBase
                 updateClinicDto.VatNumber != clinic.VatNumber)
             {
                 var existingClinic = await _unitOfWork.Repository<Clinic>()
-                    .Find(c => c.VatNumber == updateClinicDto.VatNumber && c.Id != id)
-                    .FirstOrDefaultAsync();
+                    .GetFirstOrDefaultAsync(c => c.VatNumber == updateClinicDto.VatNumber && c.Id != id);
 
                 if (existingClinic != null)
                 {
@@ -208,6 +207,3 @@ public class ClinicsController : ControllerBase
         }
     }
 }
-
-// DTOs - Aggiungi questi in una cartella DTOs o nello stesso file temporaneamente
-

@@ -2,7 +2,6 @@
 using PoliCare.Core.Entities;
 using PoliCare.Core.Interfaces;
 using PoliCare.Services.Interfaces;
-using Microsoft.EntityFrameworkCore;
 
 namespace PoliCare.Services.Services;
 
@@ -22,12 +21,9 @@ public class PatientService : IPatientService
         try
         {
             var patients = await _unitOfWork.Repository<Patient>()
-                .Find(p => p.ClinicId == clinicId)
-                .OrderBy(p => p.LastName)
-                .ThenBy(p => p.FirstName)
-                .ToListAsync();
+                .GetWhereAsync(p => p.ClinicId == clinicId);
 
-            return patients;
+            return patients.OrderBy(p => p.LastName).ThenBy(p => p.FirstName);
         }
         catch (Exception ex)
         {
@@ -55,8 +51,7 @@ public class PatientService : IPatientService
         {
             // Verifica se esiste già un paziente con lo stesso codice fiscale nella clinica
             var existingPatient = await _unitOfWork.Repository<Patient>()
-                .Find(p => p.ClinicId == patient.ClinicId && p.FiscalCode == patient.FiscalCode)
-                .FirstOrDefaultAsync();
+                .GetFirstOrDefaultAsync(p => p.ClinicId == patient.ClinicId && p.FiscalCode == patient.FiscalCode);
 
             if (existingPatient != null)
             {
@@ -90,10 +85,9 @@ public class PatientService : IPatientService
             if (updatedPatient.FiscalCode != existingPatient.FiscalCode)
             {
                 var duplicatePatient = await _unitOfWork.Repository<Patient>()
-                    .Find(p => p.ClinicId == existingPatient.ClinicId &&
-                              p.FiscalCode == updatedPatient.FiscalCode &&
-                              p.Id != patientId)
-                    .FirstOrDefaultAsync();
+                    .GetFirstOrDefaultAsync(p => p.ClinicId == existingPatient.ClinicId &&
+                                                p.FiscalCode == updatedPatient.FiscalCode &&
+                                                p.Id != patientId);
 
                 if (duplicatePatient != null)
                 {
@@ -156,16 +150,13 @@ public class PatientService : IPatientService
             var lowerSearchTerm = searchTerm.ToLower();
 
             var patients = await _unitOfWork.Repository<Patient>()
-                .Find(p => p.ClinicId == clinicId &&
-                          (p.FirstName.ToLower().Contains(lowerSearchTerm) ||
-                           p.LastName.ToLower().Contains(lowerSearchTerm) ||
-                           p.FiscalCode.ToLower().Contains(lowerSearchTerm) ||
-                           p.Email.ToLower().Contains(lowerSearchTerm)))
-                .OrderBy(p => p.LastName)
-                .ThenBy(p => p.FirstName)
-                .ToListAsync();
+                .GetWhereAsync(p => p.ClinicId == clinicId &&
+                              (p.FirstName.ToLower().Contains(lowerSearchTerm) ||
+                               p.LastName.ToLower().Contains(lowerSearchTerm) ||
+                               p.FiscalCode.ToLower().Contains(lowerSearchTerm) ||
+                               p.Email.ToLower().Contains(lowerSearchTerm)));
 
-            return patients;
+            return patients.OrderBy(p => p.LastName).ThenBy(p => p.FirstName);
         }
         catch (Exception ex)
         {
