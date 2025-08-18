@@ -25,12 +25,16 @@ builder.Services.AddSwaggerGen(c =>
 builder.Services.AddDbContext<PoliCareDbContext>(options =>
     options.UseNpgsql(
         builder.Configuration.GetConnectionString("DefaultConnection"),
-        x => x.MigrationsAssembly("PoliCare.Infrastructure") // Assicurati che sia esatto
+        x => x.MigrationsAssembly("PoliCare.Infrastructure")
     )
 );
-builder.Services.AddScoped<IRoomService, RoomService>();
+
+// Business Services Registration
 builder.Services.AddScoped<IPatientService, PatientService>();
 builder.Services.AddScoped<IDoctorService, DoctorService>();
+builder.Services.AddScoped<IRoomService, RoomService>(); // ✅ STEP 13
+builder.Services.AddScoped<ISchedulingService, SchedulingService>(); // ✅ STEP 14 - Smart Scheduling Engine
+builder.Services.AddScoped<IAppointmentService, AppointmentService>(); // ✅ STEP 14 - Appointments Management
 
 // Repository Pattern con Logging
 builder.Services.AddScoped<IUnitOfWork>(provider =>
@@ -40,7 +44,6 @@ builder.Services.AddScoped<IUnitOfWork>(provider =>
     var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
     return new UnitOfWork(context, logger, loggerFactory);
 });
-
 
 // CORS
 builder.Services.AddCors(options =>
