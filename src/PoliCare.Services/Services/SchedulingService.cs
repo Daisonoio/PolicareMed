@@ -306,24 +306,6 @@ public class SchedulingService : ISchedulingService
 
     // PRIVATE HELPER METHODS
 
-    private async Task<IEnumerable<Doctor>> GetAvailableDoctorsAsync(Guid clinicId, Guid? preferredDoctorId, AppointmentType type)
-    {
-        if (preferredDoctorId.HasValue)
-        {
-            var preferredDoctor = await _unitOfWork.Repository<Doctor>().GetByIdAsync(preferredDoctorId.Value);
-            return preferredDoctor != null ? new[] { preferredDoctor } : Array.Empty<Doctor>();
-        }
-
-        return await _unitOfWork.Repository<Doctor>()
-            .GetWhereAsync(d => d.ClinicId == clinicId);
-    }
-
-    private async Task<IEnumerable<Room>> GetAvailableRoomsAsync(Guid clinicId)
-    {
-        return await _unitOfWork.Repository<Room>()
-            .GetWhereAsync(r => r.ClinicId == clinicId && r.IsActive);
-    }
-
     private async Task<IEnumerable<Doctor>> GetDoctorsByIdsAsync(IEnumerable<Guid> doctorIds)
     {
         var doctors = new List<Doctor>();
@@ -353,58 +335,6 @@ public class SchedulingService : ISchedulingService
         var endDate = preferredDate.Date.AddDays(maxDays);
 
         return (startDate, endDate);
-    }
-
-    private async Task<IEnumerable<AppointmentSlot>> FindSlotsForDoctorRoomAsync(
-        Doctor doctor, Room room, DateTime startDate, DateTime endDate, int durationMinutes)
-    {
-        var slots = new List<AppointmentSlot>();
-        var duration = TimeSpan.FromMinutes(durationMinutes);
-
-        // Ottieni appuntamenti esistenti per questo medico e sala
-        var existingAppointments = await _unitOfWork.Repository<Appointment>()
-            .GetWhereAsync(a => (a.DoctorId == doctor.Id || a.RoomId == room.Id) &&
-                              a.StartTime >= startDate && a.StartTime <= endDate &&
-                              a.Status != AppointmentStatus.Cancelled.ToString());
-
-        // Genera slot ogni 15 minuti dalle 8:00 alle 18:00
-        var currentDate = startDate;
-        while (currentDate <= endDate)
-        {
-            var dayStart = currentDate.Date.AddHours(8); // 8:00
-            var dayEnd = currentDate.Date.AddHours(18);   // 18:00
-
-            var current = dayStart;
-            while (current.Add(duration) <= dayEnd)
-            {
-                var slotEnd = current.Add(duration);
-
-                // Verifica se lo slot è libero
-                var hasConflict = existingAppointments.Any(a =>
-                    (a.StartTime < slotEnd && a.EndTime > current));
-
-                if (!hasConflict)
-                {
-                    slots.Add(new AppointmentSlot
-                    {
-                        StartTime = current,
-                        EndTime = slotEnd,
-                        DoctorId = doctor.Id,
-                        RoomId = room.Id,
-                        IsAvailable = true,
-                        DoctorName = $"{doctor.User?.FirstName} {doctor.User?.LastName}".Trim(),
-                        RoomName = room.Name,
-                        Specialization = doctor.Specialization
-                    });
-                }
-
-                current = current.AddMinutes(15); // Slot ogni 15 minuti
-            }
-
-            currentDate = currentDate.AddDays(1);
-        }
-
-        return slots;
     }
 
     /// <summary>
@@ -688,10 +618,89 @@ public class SchedulingService : ISchedulingService
         return slots.Take(numberOfSlots);
     }
 
-    /// <summary>
-    /// Metodo pubblico per ottenere medici disponibili (per debug)
-    /// </summary>
+    // DEBUG METHODS IMPLEMENTATION
 
+    /// <summary>
+    /// DEBUG: Ottiene medici disponibili per una clinica
+    /// </summary>
+    public async Task<IEnumerable<Doctor>> GetAvailableDoctorsAsync(Guid clinicId, Guid? preferredDoctorId, AppointmentType type)
+    {
+        if (preferredDoctorId.HasValue)
+        {
+            var preferredDoctor = await _unitOfWork.Repository<Doctor>().GetByIdAsync(preferredDoctorId.Value);
+            return preferredDoctor != null ? new[] { preferredDoctor } : Array.Empty<Doctor>();
+        }
+
+        return await _unitOfWork.Repository<Doctor>()
+            .GetWhereAsync(d => d.ClinicId == clinicId);
+    }
+
+    /// <summary>
+    /// DEBUG: Ottiene sale disponibili per una clinica
+    /// </summary>
+    public async Task<IEnumerable<Room>> GetAvailableRoomsAsync(Guid clinicId)
+    {
+        return await _unitOfWork.Repository<Room>()
+            .GetWhereAsync(r => r.ClinicId == clinicId && r.IsActive);
+    }
+
+    /// <summary>
+    /// DEBUG: Genera slot per una combinazione medico-sala specifica
+    /// </summary>
+    public async Task<IEnumerable<AppointmentSlot>> FindSlotsForDoctorRoomAsync(
+        Doctor doctor, Room room, DateTime startDate, DateTime endDate, int durationMinutes)
+    {
+        var slots = new List<AppointmentSlot>();
+        var duration = TimeSpan.FromMinutes(durationMinutes);
+
+        // Ottieni appuntamenti esistenti per questo medico e sala
+        var existingAppointments = await _unitOfWork.Repository<Appointment>()
+            .GetWhereAsync(a => (a.DoctorId == doctor.Id || a.RoomId == room.Id) &&
+                              a.StartTime >= startDate && a.StartTime <= endDate &&
+                              a.Status != AppointmentStatus.Cancelled.ToString());
+
+        // Genera slot ogni 15 minuti dalle 8:00 alle 18:00
+        var currentDate = startDate;
+        while (currentDate <= endDate)
+        {
+            var dayStart = currentDate.Date.AddHours(8); // 8:00
+            var dayEnd = currentDate.Date.AddHours(18);   // 18:00
+
+            var current = dayStart;
+            while (current.Add(duration) <= dayEnd)
+            {
+                var slotEnd = current.Add(duration);
+
+                // Verifica se lo slot è libero
+                var hasConflict = existingAppointments.Any(a =>
+                    (a.StartTime < slotEnd && a.EndTime > current));
+
+                if (!hasConflict)
+                {
+                    // Ottieni informazioni User del medico per il nome
+                    var user = await _unitOfWork.Repository<User>().GetByIdAsync(doctor.UserId);
+
+                    slots.Add(new AppointmentSlot
+                    {
+                        StartTime = current,
+                        EndTime = slotEnd,
+                        DoctorId = doctor.Id,
+                        RoomId = room.Id,
+                        IsAvailable = true,
+                        DoctorName = user != null ? $"{user.FirstName} {user.LastName}".Trim() : "Unknown Doctor",
+                        RoomName = room.Name,
+                        Specialization = doctor.Specialization
+                    });
+                }
+
+                current = current.AddMinutes(15); // Slot ogni 15 minuti
+            }
+
+            currentDate = currentDate.AddDays(1);
+        }
+
+        return slots;
+    }
 }
 
 /// <summary>

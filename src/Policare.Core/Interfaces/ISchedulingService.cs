@@ -111,4 +111,22 @@ public interface ISchedulingService
         Guid doctorId,
         int numberOfSlots = 5,
         int durationMinutes = 30);
+
+    // DEBUG METHODS - Per troubleshooting e testing
+
+    /// <summary>
+    /// DEBUG: Ottiene medici disponibili per una clinica
+    /// </summary>
+    Task<IEnumerable<Doctor>> GetAvailableDoctorsAsync(Guid clinicId, Guid? preferredDoctorId, AppointmentType type);
+
+    /// <summary>
+    /// DEBUG: Ottiene sale disponibili per una clinica
+    /// </summary>
+    Task<IEnumerable<Room>> GetAvailableRoomsAsync(Guid clinicId);
+
+    /// <summary>
+    /// DEBUG: Genera slot per una combinazione medico-sala specifica
+    /// </summary>
+    Task<IEnumerable<AppointmentSlot>> FindSlotsForDoctorRoomAsync(
+        Doctor doctor, Room room, DateTime startDate, DateTime endDate, int durationMinutes);
 }

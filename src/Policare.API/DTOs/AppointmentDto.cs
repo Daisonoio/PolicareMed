@@ -206,7 +206,7 @@ public class UtilizationMetricsDto
     public double OptimizationOpportunityScore { get; set; }
 }
 
-// AGGIUNGI al file AppointmentDto.cs
+// DEBUG DTOs
 
 public class SchedulingDebugInfo
 {

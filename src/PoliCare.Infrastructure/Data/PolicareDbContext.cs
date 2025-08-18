@@ -20,6 +20,61 @@ public class PoliCareDbContext : DbContext
     public DbSet<TimeSlot> TimeSlots { get; set; }
     public DbSet<MedicalRecord> MedicalRecords { get; set; }
 
+    // ✅ FIX PERMANENTE UTC: Override SaveChanges per garantire UTC
+    public override int SaveChanges()
+    {
+        EnsureUtcTimestamps();
+        return base.SaveChanges();
+    }
+
+    public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        EnsureUtcTimestamps();
+        return await base.SaveChangesAsync(cancellationToken);
+    }
+
+    // ✅ FIX PERMANENTE UTC: Metodo per garantire che tutti i DateTime siano UTC
+    private void EnsureUtcTimestamps()
+    {
+        var entries = ChangeTracker.Entries<BaseEntity>();
+        var utcNow = DateTime.UtcNow;
+
+        foreach (var entry in entries)
+        {
+            switch (entry.State)
+            {
+                case EntityState.Added:
+                    entry.Entity.CreatedAt = utcNow;
+                    entry.Entity.UpdatedAt = utcNow;
+                    break;
+
+                case EntityState.Modified:
+                    entry.Entity.UpdatedAt = utcNow;
+                    break;
+
+                case EntityState.Deleted:
+                    // Soft delete implementation
+                    entry.State = EntityState.Modified;
+                    entry.Entity.IsDeleted = true;
+                    entry.Entity.DeletedAt = utcNow;
+                    entry.Entity.UpdatedAt = utcNow;
+                    break;
+            }
+        }
+
+        // ✅ FIX PERMANENTE UTC: Converti tutti i DateTime Unspecified in UTC
+        foreach (var entry in ChangeTracker.Entries())
+        {
+            foreach (var property in entry.Properties)
+            {
+                if (property.CurrentValue is DateTime dateTime && dateTime.Kind == DateTimeKind.Unspecified)
+                {
+                    property.CurrentValue = DateTime.SpecifyKind(dateTime, DateTimeKind.Utc);
+                }
+            }
+        }
+    }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
