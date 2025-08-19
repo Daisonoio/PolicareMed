@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace PoliCare.Core.Entities;
 
@@ -264,15 +265,17 @@ public class ClinicSecurity : BaseEntity
     // NAVIGATION PROPERTIES
     public virtual Clinic Clinic { get; set; } = null!;
 
-    // COMPUTED PROPERTIES
+    // COMPUTED PROPERTIES - Marcate [NotMapped] per evitare mapping EF
     /// <summary>
     /// Verifica se la clinica può operare
     /// </summary>
+    [NotMapped]
     public bool CanOperate => IsActive && !IsSuspended && !PaymentBlocked && !IsSubscriptionExpired;
 
     /// <summary>
     /// Verifica se l'abbonamento è scaduto
     /// </summary>
+    [NotMapped]
     public bool IsSubscriptionExpired
     {
         get
@@ -286,6 +289,7 @@ public class ClinicSecurity : BaseEntity
     /// <summary>
     /// Verifica se è nel periodo di grazia
     /// </summary>
+    [NotMapped]
     public bool IsInGracePeriod
     {
         get
@@ -300,6 +304,7 @@ public class ClinicSecurity : BaseEntity
     /// <summary>
     /// Giorni rimanenti nel periodo di grazia
     /// </summary>
+    [NotMapped]
     public int GracePeriodDaysRemaining
     {
         get
@@ -310,6 +315,13 @@ public class ClinicSecurity : BaseEntity
         }
     }
 
+    /// <summary>
+    /// Percentuale utilizzo storage
+    /// </summary>
+    [NotMapped]
+    public decimal StorageUsagePercentage => MaxStorageMB > 0 ? (decimal)CurrentStorageUsageMB / MaxStorageMB * 100 : 0;
+
+    // METODI HELPER - I metodi non hanno bisogno di [NotMapped]
     /// <summary>
     /// Verifica se ha raggiunto il limite utenti
     /// </summary>
@@ -329,14 +341,10 @@ public class ClinicSecurity : BaseEntity
     /// <summary>
     /// Verifica se ha raggiunto il limite storage
     /// </summary>
+    [NotMapped]
     public bool IsStorageLimitReached => CurrentStorageUsageMB >= MaxStorageMB;
 
-    /// <summary>
-    /// Percentuale utilizzo storage
-    /// </summary>
-    public decimal StorageUsagePercentage => MaxStorageMB > 0 ? (decimal)CurrentStorageUsageMB / MaxStorageMB * 100 : 0;
-
-    // METODI HELPER
+    // METODI DI AZIONE
     /// <summary>
     /// Sospende la clinica
     /// </summary>

@@ -1,62 +1,171 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using PoliCare.Core.Interfaces;
 using PoliCare.Infrastructure.Data;
 using PoliCare.Infrastructure.Repositories;
 using PoliCare.Services.Interfaces;
 using PoliCare.Services.Services;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
-AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 // Add services to the container.
 builder.Services.AddControllers();
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(c =>
+
+// Database configuration
+builder.Services.AddDbContext<PoliCareDbContext>(options =>
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+// Repository pattern registration
+builder.Services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
+builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
+
+// Business services registration
+builder.Services.AddScoped<IPatientService, PatientService>();
+builder.Services.AddScoped<IDoctorService, DoctorService>();
+builder.Services.AddScoped<IRoomService, RoomService>();
+builder.Services.AddScoped<ISchedulingService, SchedulingService>();
+builder.Services.AddScoped<IAppointmentService, AppointmentService>();
+
+// NEW: Authentication services registration
+builder.Services.AddScoped<IPasswordService, PasswordService>();
+builder.Services.AddScoped<IJwtService, JwtService>();
+
+// JWT Configuration
+var jwtSettings = builder.Configuration.GetSection("JwtSettings");
+builder.Services.Configure<JwtSettings>(jwtSettings);
+
+var secretKey = jwtSettings["SecretKey"];
+if (string.IsNullOrEmpty(secretKey))
 {
-    c.SwaggerDoc("v1", new OpenApiInfo
+    throw new InvalidOperationException("JWT SecretKey is not configured");
+}
+
+var key = Encoding.ASCII.GetBytes(secretKey);
+
+// JWT Authentication
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =>
+{
+    options.RequireHttpsMetadata = false; // Set to true in production
+    options.SaveToken = true;
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuerSigningKey = true,
+        IssuerSigningKey = new SymmetricSecurityKey(key),
+        ValidateIssuer = true,
+        ValidIssuer = jwtSettings["Issuer"],
+        ValidateAudience = true,
+        ValidAudience = jwtSettings["Audience"],
+        ValidateLifetime = true,
+        ClockSkew = TimeSpan.Zero, // Remove delay of token when expired
+        RequireExpirationTime = true
+    };
+
+    // Handle JWT events
+    options.Events = new JwtBearerEvents
+    {
+        OnAuthenticationFailed = context =>
+        {
+            var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
+            logger.LogWarning("JWT Authentication failed: {Exception}", context.Exception.Message);
+            return Task.CompletedTask;
+        },
+        OnTokenValidated = context =>
+        {
+            var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
+            var userId = context.Principal?.FindFirst("userId")?.Value;
+            logger.LogDebug("JWT Token validated for user: {UserId}", userId);
+            return Task.CompletedTask;
+        },
+        OnChallenge = context =>
+        {
+            var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
+            logger.LogWarning("JWT Challenge triggered: {Error}", context.Error);
+            return Task.CompletedTask;
+        }
+    };
+});
+
+// Authorization
+builder.Services.AddAuthorization(options =>
+{
+    // Define role-based policies
+    options.AddPolicy("SuperAdminOnly", policy =>
+        policy.RequireClaim("role", "SuperAdmin"));
+
+    options.AddPolicy("AdminOrAbove", policy =>
+        policy.RequireClaim("role", "SuperAdmin", "PlatformAdmin", "ClinicOwner"));
+
+    options.AddPolicy("ClinicStaff", policy =>
+        policy.RequireClaim("role", "SuperAdmin", "PlatformAdmin", "ClinicOwner", "ClinicManager", "AdminStaff"));
+
+    options.AddPolicy("MedicalStaff", policy =>
+        policy.RequireClaim("role", "SuperAdmin", "PlatformAdmin", "ClinicOwner", "ClinicManager", "Doctor", "Nurse"));
+
+    options.AddPolicy("AllStaff", policy =>
+        policy.RequireClaim("role", "SuperAdmin", "PlatformAdmin", "ClinicOwner", "ClinicManager", "AdminStaff", "Doctor", "Nurse", "Receptionist"));
+});
+
+// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
+builder.Services.AddEndpointsApiExplorer();
+
+// Enhanced Swagger configuration with JWT support
+builder.Services.AddSwaggerGen(options =>
+{
+    options.SwaggerDoc("v1", new OpenApiInfo
     {
         Title = "PoliCare API",
         Version = "v1",
-        Description = "API per gestione poliambulatori"
+        Description = "API per gestione poliambulatori con Smart Scheduling Engine"
+    });
+
+    // JWT Authentication support in Swagger
+    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Description = "JWT Authorization header using the Bearer scheme. Example: \"Authorization: Bearer {token}\"",
+        Name = "Authorization",
+        In = ParameterLocation.Header,
+        Type = SecuritySchemeType.ApiKey,
+        Scheme = "Bearer"
+    });
+
+    options.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            Array.Empty<string>()
+        }
     });
 });
 
-// Database Configuration
-builder.Services.AddDbContext<PoliCareDbContext>(options =>
-    options.UseNpgsql(
-        builder.Configuration.GetConnectionString("DefaultConnection"),
-        x => x.MigrationsAssembly("PoliCare.Infrastructure")
-    )
-);
-
-// Business Services Registration
-builder.Services.AddScoped<IPatientService, PatientService>();
-builder.Services.AddScoped<IDoctorService, DoctorService>();
-builder.Services.AddScoped<IRoomService, RoomService>(); // ✅ STEP 13
-builder.Services.AddScoped<ISchedulingService, SchedulingService>(); // ✅ STEP 14 - Smart Scheduling Engine
-builder.Services.AddScoped<IAppointmentService, AppointmentService>(); // ✅ STEP 14 - Appointments Management
-
-// Repository Pattern con Logging
-builder.Services.AddScoped<IUnitOfWork>(provider =>
-{
-    var context = provider.GetRequiredService<PoliCareDbContext>();
-    var logger = provider.GetRequiredService<ILogger<UnitOfWork>>();
-    var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
-    return new UnitOfWork(context, logger, loggerFactory);
-});
-
-// CORS
+// CORS configuration
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowReactApp", policy =>
+    options.AddDefaultPolicy(policy =>
     {
-        policy.WithOrigins("http://localhost:3000", "http://localhost:5173")
+        policy.AllowAnyOrigin()
               .AllowAnyHeader()
-              .AllowAnyMethod()
-              .AllowCredentials();
+              .AllowAnyMethod();
     });
 });
+
+// Health checks
+builder.Services.AddHealthChecks()
+    .AddDbContextCheck<PoliCareDbContext>();
 
 var app = builder.Build();
 
@@ -64,16 +173,30 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
-    app.UseSwaggerUI(c =>
+    app.UseSwaggerUI(options =>
     {
-        c.SwaggerEndpoint("/swagger/v1/swagger.json", "PoliCare API v1");
-        c.RoutePrefix = string.Empty; // Swagger disponibile su root "/"
+        options.SwaggerEndpoint("/swagger/v1/swagger.json", "PoliCare API v1");
+        options.RoutePrefix = string.Empty; // Swagger at root
     });
 }
 
 app.UseHttpsRedirection();
-app.UseCors("AllowReactApp");
+
+// CORS
+app.UseCors();
+
+// Authentication & Authorization
+app.UseAuthentication(); // Must be before UseAuthorization
 app.UseAuthorization();
+
+// Controllers
 app.MapControllers();
+
+// Health checks
+app.MapHealthChecks("/health");
+
+// Background service for cleanup expired sessions
+app.Services.CreateScope().ServiceProvider.GetRequiredService<IJwtService>()
+    .CleanupExpiredSessionsAsync(); // Run once at startup
 
 app.Run();
