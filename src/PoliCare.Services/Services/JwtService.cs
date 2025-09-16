@@ -45,7 +45,7 @@ public class JwtService : IJwtService
                 _jwtSettings.RememberMeExpiryDays * 24 * 60 :
                 _jwtSettings.ExpiryMinutes;
 
-            var expiresAt = DateTime.UtcNow.AddMinutes(expiryMinutes);
+            var expiresAt = DateTime.SpecifyKind(DateTime.UtcNow.AddMinutes(expiryMinutes), DateTimeKind.Utc);
 
             // Crea claims per il token
             var claims = CreateClaims(user);
@@ -56,10 +56,12 @@ public class JwtService : IJwtService
             // Genera refresh token se abilitato
             var refreshToken = _jwtSettings.EnableRefreshToken ? GenerateRefreshToken() : string.Empty;
 
-            // Crea sessione nel database
+            // Salva sessione nel database
             var sessionId = await CreateUserSessionAsync(user, accessToken, refreshToken, expiresAt);
 
-            var result = new JwtTokenResult
+            _logger.LogInformation("Token generated for user {UserId}, session {SessionId}", user.Id, sessionId);
+
+            return new JwtTokenResult
             {
                 AccessToken = accessToken,
                 RefreshToken = refreshToken,
@@ -67,36 +69,23 @@ public class JwtService : IJwtService
                 SessionId = sessionId,
                 TokenType = "Bearer"
             };
-
-            _logger.LogInformation("JWT token generated for user {UserId}, expires at {ExpiresAt}",
-                user.Id, expiresAt);
-
-            return result;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error generating JWT token for user {UserId}", user.Id);
+            _logger.LogError(ex, "Error generating token for user {UserId}", user.Id);
             throw;
         }
     }
 
     /// <summary>
-    /// Genera refresh token crittograficamente sicuro
+    /// Genera refresh token
     /// </summary>
     public string GenerateRefreshToken()
     {
-        try
-        {
-            var randomNumber = new byte[64];
-            using var rng = RandomNumberGenerator.Create();
-            rng.GetBytes(randomNumber);
-            return Convert.ToBase64String(randomNumber);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error generating refresh token");
-            throw;
-        }
+        var randomBytes = new byte[64];
+        using var rng = RandomNumberGenerator.Create();
+        rng.GetBytes(randomBytes);
+        return Convert.ToBase64String(randomBytes);
     }
 
     /// <summary>
@@ -118,14 +107,7 @@ public class JwtService : IJwtService
                 ClockSkew = TimeSpan.Zero
             };
 
-            var principal = _tokenHandler.ValidateToken(token, tokenValidationParameters, out SecurityToken validatedToken);
-
-            if (validatedToken is not JwtSecurityToken jwtToken ||
-                !jwtToken.Header.Alg.Equals(SecurityAlgorithms.HmacSha256, StringComparison.InvariantCultureIgnoreCase))
-            {
-                return null;
-            }
-
+            var principal = _tokenHandler.ValidateToken(token, tokenValidationParameters, out _);
             return principal;
         }
         catch (Exception ex)
@@ -143,9 +125,10 @@ public class JwtService : IJwtService
         try
         {
             var principal = ValidateToken(token);
-            var userIdClaim = principal?.FindFirst("userId")?.Value;
+            var userIdClaim = principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value ??
+                             principal?.FindFirst("userId")?.Value;
 
-            return userIdClaim != null && Guid.TryParse(userIdClaim, out var userId) ? userId : null;
+            return Guid.TryParse(userIdClaim, out var userId) ? userId : null;
         }
         catch (Exception ex)
         {
@@ -213,7 +196,7 @@ public class JwtService : IJwtService
 
             // Carica utente associato
             var user = await _unitOfWork.Repository<User>().GetByIdAsync(session.UserId);
-            if (user == null || !user.CanLogin)
+            if (user == null || !user.IsActive)
             {
                 _logger.LogWarning("User not found or cannot login for session {SessionId}", session.Id);
                 await RevokeTokenAsync(refreshTokenHash, "User not valid");
@@ -357,14 +340,18 @@ public class JwtService : IJwtService
     {
         var claims = new List<Claim>
         {
+            new(ClaimTypes.NameIdentifier, user.Id.ToString()),
+            new(ClaimTypes.Email, user.Email),
+            new(ClaimTypes.GivenName, user.FirstName),
+            new(ClaimTypes.Surname, user.LastName),
+            new(ClaimTypes.Role, user.Role.ToString()),
             new("userId", user.Id.ToString()),
             new("email", user.Email),
             new("firstName", user.FirstName),
             new("lastName", user.LastName),
             new("role", user.Role.ToString()),
-            new("clinicId", user.ClinicId.ToString()),
-            new("timeZone", user.TimeZone),
-            new("language", user.PreferredLanguage),
+            new("timeZone", user.TimeZone ?? "UTC"),
+            new("language", user.PreferredLanguage ?? "en-US"),
             new(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
             new(JwtRegisteredClaimNames.Email, user.Email),
             new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
@@ -416,7 +403,9 @@ public class JwtService : IJwtService
             LastUsedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc),
             ExpiresAt = expiresAt,
             IsActive = true,
-            IsRevoked = false
+            IsRevoked = false,
+            CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc),
+            UpdatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc)
         };
 
         await _unitOfWork.Repository<UserSession>().AddAsync(session);
